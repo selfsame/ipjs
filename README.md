@@ -1,6 +1,6 @@
-# playground for ipfs.js with cljs and om.next
+# js code linking with ipfs
 
-## setting up ipfs
+## setup
 
 * install ipfs (https://ipfs.io/)
   * `ipfs init`
