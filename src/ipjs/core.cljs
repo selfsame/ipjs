@@ -2,6 +2,9 @@
   (:refer-clojure :exclude [cat resolve]))
 
 (enable-console-print!)
+(defn on-js-reload [])
+
+(def log #(.log js/console %))
 
 (set! (.-ipfs js/window) (.ipfsAPI js/window))
 
@@ -9,6 +12,7 @@
 
 (def cache (set! (.-cache js/window) #js {}))
 (defn dag? [o] (= (aget o "Data") "\b"))
+(defn link? [s] (re-find #"^Qm[a-zA-Z0-9]{44}$" s))
 
 (defn- ipfs-fn 
   ([prop] (ipfs-fn js/ipfs prop))
@@ -30,17 +34,20 @@
 (defn js-eval [b] (js/eval (str "(" (.toString b) ")")))
 
 (defn resolve 
-  ([s] (resolve s identity))
+  ([s] (or (aget cache s) (resolve s identity)))
   ([s cb]
-    (let [root #js {}]
-      (object-get s 
-        (fn [v]
-          (if (dag? v) 
-            (construct v cb root) 
-            (if-let [cached (get cache s)] 
-              (cb cached)
-              (cat s #(cb (aset cache s (js-eval %)))))))) 
-      root)))
+    (if-let [cached (aget cache s)] 
+      (do (cb cached) cached)
+      (let [root #js {}]
+        (aset cache s root)
+        (object-get s 
+          (fn [v]
+            (if (dag? v) 
+              (construct v cb root) 
+              (if-let [cached (get cache s)] 
+                (cb cached)
+                (cat s #(cb (aset cache s (js-eval %)))))))) 
+        root))))
 
 (defn construct 
   ([o cb] (construct o cb #js {}))
@@ -51,14 +58,14 @@
           #(aset root (subname (.-Name link)) %)))) 
     (cb root)))
 
+(set! (.-universe js/window) 
+  (js/Proxy. #js {} 
+    #js {:get 
+      (fn [target name receiver] 
+        (or (aget cache name) 
+            (if (link? name) 
+                (resolve name 
+                  #(.info js/console name))
+                (aget target name))))}))
+
 (set! (.-resolve js/window) resolve)
-
-(defn on-js-reload [])
-
-(def lib (resolve "QmYhkkzLDkN8dfYoEe9ERTgjVnP5AexuBuZhCNYtHDdioJ"))
-
-
-
-
-
-
